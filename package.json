@@ -1,0 +1,27 @@
+{
+  "name": "nexus-mods-mcp",
+  "version": "0.3.0",
+  "private": true,
+  "description": "MCP server exposing the Nexus Mods API (v1 REST + v2 GraphQL + v3 Upload API) to an AI agent",
+  "type": "module",
+  "bin": {
+    "nexus-mods-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch",
+    "start": "node dist/index.js",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:live": "node scripts/smoke.mjs --live",
+    "test": "npm run build && node scripts/smoke.mjs",
+    "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3"
+  }
+}
