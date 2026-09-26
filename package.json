@@ -13,7 +13,7 @@
     "start": "node dist/index.js",
     "smoke": "node scripts/smoke.mjs",
     "smoke:live": "node scripts/smoke.mjs --live",
-    "test": "npm run build && node scripts/smoke.mjs",
+    "test": "npm run build && node scripts/smoke.mjs && node scripts/upload-smoke.mjs",
     "inspect": "npx @modelcontextprotocol/inspector node dist/index.js"
   },
   "dependencies": {

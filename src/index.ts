@@ -30,8 +30,8 @@ import {
 import { NexusClient, type V3Envelope } from "./nexus-client.js";
 import { GRAPHQL_CHEATSHEET, SEARCH_MODS, SORT_KEYS, buildSort, type SearchModsResult, type SortKey } from "./queries.js";
 import {
-  SINGLE_PART_LIMIT_BYTES,
   UPLOAD_GUIDE,
+  UploadTransferError,
   resolveArchivePath,
   uploadArchive,
   validateModFileName,
@@ -1053,7 +1053,9 @@ server.registerTool(
       const plan = prune({
         archive: filePath,
         size_bytes: size,
-        upload_mode: size > SINGLE_PART_LIMIT_BYTES ? "multipart" : "single-part",
+        // Always multipart, whatever the size: this is what Nexus' own upload action does, and the
+        // single-part presigned signature (Content-Disposition/Content-MD5) is too brittle.
+        upload_mode: "multipart",
         target: args.mod_file_id
           ? `new version of mod file ${args.mod_file_id}`
           : `new file on ${modUrl(domain, args.mod_id)}`,
@@ -1070,11 +1072,25 @@ server.registerTool(
       // Resolve the mod first: a wrong mod_id must fail before megabytes leave the machine.
       const mod = args.mod_file_id ? null : await resolveMod(domain, args.mod_id);
 
-      const upload = await uploadArchive(client, {
-        filePath,
-        filename,
-        timeoutMs: UPLOAD_TIMEOUT_MS,
-      });
+      let upload;
+      try {
+        upload = await uploadArchive(client, {
+          filePath,
+          filename,
+          timeoutMs: UPLOAD_TIMEOUT_MS,
+        });
+      } catch (error) {
+        // An upload id means bytes may already be stored: recover, never blindly re-upload.
+        if (error instanceof UploadTransferError && error.upload_id) {
+          throw new Error(
+            `${error.message}\n` +
+              `Do NOT upload again yet: call nexus_upload_status with upload_id ${error.upload_id}. ` +
+              "If it reports state=available, finish with nexus_publish_upload using the same parameters.\n" +
+              `Steps completed: ${error.steps.join(" -> ")}`,
+          );
+        }
+        throw error;
+      }
 
       const published = await publishUpload({
         upload_id: upload.upload_id,

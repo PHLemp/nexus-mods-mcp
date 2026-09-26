@@ -165,6 +165,7 @@ for that particular workflow, or on a per-user Junie secrets mechanism if availa
 | Upload refused, "outside NEXUS_UPLOAD_ROOT" | The archive is not under the configured sandbox directory                       |
 | HTTP 403 on a publishing call             | The API key does not belong to an author of that mod                             |
 | HTTP 422 on publish                       | `name`/`version` or a flag broke a Nexus constraint; the field is named in the error |
+| Storage `SignatureDoesNotMatch`           | Presigned transfers go through multipart with the exact headers Nexus' own action sends; if this ever returns, do not retry blindly, check `nexus_upload_status` first |
 | Upload succeeded but publishing failed    | Reuse the returned `upload_id` with `nexus_publish_upload`, do not re-upload      |
 
 ## 6. Tools
@@ -233,14 +234,35 @@ nexus_mod_overview         -> refresh: true, verify
 
 `nexus_upload_mod_file` runs the whole v3 sequence in one call:
 
-1. `POST /v3/uploads` (or `/uploads/multipart` above 100 MiB) with size, filename and MD5.
-2. `PUT` the bytes to the presigned storage URL, with the exact `Content-Disposition` and
-   `Content-MD5` the signature was built from; multipart also `POST`s the ETag list.
+1. `POST /v3/uploads/multipart` with size and filename — used for **every** size, not only above
+   100 MiB, because that is what Nexus' own GitHub Action does.
+2. `PUT` each part to its presigned storage URL with `Content-Type: application/octet-stream` and
+   `Content-Length`, keeping each `ETag`, then `POST` the ETag list to the completion URL.
 3. `POST /v3/uploads/{id}/finalise`, then polls `GET /v3/uploads/{id}` until `state: available`.
 4. `POST /v3/mod-files/{mod_file_id}/versions` (update) or `POST /v3/mod-files` (new file).
 5. Optionally `POST /v3/mods/{uid}/changelogs`.
 
-If step 4 fails, the bytes are already on Nexus: **do not re-upload**, reuse the returned
+The single-part `POST /v3/uploads` route is deliberately unused: its presigned signature also covers
+`Content-Disposition` (and `Content-MD5` when a digest is supplied), and storage answers
+`403 SignatureDoesNotMatch` on the slightest mismatch. Nexus-Mods/upload-action dropped that route
+in March 2026 and multiparts everything; this server mirrors it.
+
+### Content integrity (the `md5` question)
+
+Nexus badges `md5` as *required from 2026-12-01*. That badge sits on `POST /v3/uploads` **only**,
+where the digest is folded into the presigned signature. The multipart request body
+(`CreateUploadRequest`) has **no** `md5` field, and `GET /v3/uploads/{id}` returns no checksum, so
+the deadline does not reach the route this server uses — and the server does not pretend otherwise.
+
+If the single-part route is ever reinstated, treat the digest as mandatory from that date: hex in
+the request body, and the same digest base64-encoded in `Content-MD5` on the PUT.
+
+Independently of that API rule, each part is compared with the MD5 S3 returns as its `ETag`. This is
+a local integrity check on an irreversible publication, reported as `integrity`; an opaque ETag
+(SSE-KMS) is reported as unverifiable rather than treated as a failure.
+
+If anything fails once the session exists, the error carries `[upload_id: ...]`: the bytes may
+already be on Nexus, so **do not re-upload**. Check `nexus_upload_status`, then reuse that
 `upload_id` with `nexus_publish_upload`.
 
 Guardrails:
@@ -249,7 +271,10 @@ Guardrails:
 - `NEXUS_UPLOAD_ROOT` confines which directory archives may be read from, so the model cannot ask
   the server to publish an arbitrary file;
 - `name` / `version` are validated against the Nexus patterns *before* any byte is sent;
-- `dry_run: true` reports the plan (size, transfer mode, target, category) without contacting Nexus.
+- `dry_run: true` reports the plan (size, transfer mode, target and category) without contacting
+  Nexus;
+- an inconsistent part plan from Nexus aborts before a single byte is sent, and the server never
+  retries an upload automatically after a storage rejection.
 
 The `nexus_release_update` prompt drives the whole sequence and asks for confirmation before the
 real upload. `nexus://upload-guide` documents it for the model.

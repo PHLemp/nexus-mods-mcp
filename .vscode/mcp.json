@@ -1,0 +1,13 @@
+{
+  "servers": {
+    "nexus-mods": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["E:\\Modding\\Tools\\nexus-mods-mcp\\dist\\index.js"],
+      "env": { "NEXUS_API_KEY": "${input:nexusApiKey}" }
+    }
+  },
+  "inputs": [
+    { "id": "nexusApiKey", "type": "promptString", "description": "Nexus Mods API key", "password": true }
+  ]
+}

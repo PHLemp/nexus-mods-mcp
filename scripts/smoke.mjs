@@ -107,6 +107,11 @@ try {
     tools.every((tool) => tool.annotations && typeof tool.annotations === "object"),
   );
   check("every tool has a description", tools.every((tool) => (tool.description ?? "").length > 40));
+  const uploadTool = tools.find((tool) => tool.name === "nexus_upload_mod_file");
+  check(
+    "upload tool exposes no MD5 escape hatch",
+    !uploadTool?.inputSchema?.properties?.use_md5,
+  );
 
   const { resources } = await request("resources/list");
   console.log(`\nresources (${resources.length}): ${resources.map((item) => item.uri).join(", ")}`);
@@ -120,10 +125,9 @@ try {
   );
 
   const guide = await request("resources/read", { uri: "nexus://upload-guide" });
-  check(
-    "upload guide explains the recovery path",
-    (guide?.contents?.[0]?.text ?? "").includes("nexus_publish_upload"),
-  );
+  const guideText = guide?.contents?.[0]?.text ?? "";
+  check("upload guide explains the recovery path", guideText.includes("nexus_publish_upload"));
+  check("upload guide documents the multipart transport", guideText.includes("/v3/uploads/multipart"));
 
   // Uploads are gated twice. dry_run keeps this harmless even when both switches are on.
   const uploadGuard = await request("tools/call", {
@@ -145,6 +149,12 @@ try {
       : uploadGuardText.includes('"dry_run": true'),
     uploadGuardText.slice(0, 120),
   );
+  if (uploadGuard.isError !== true) {
+    check(
+      "upload dry run announces the multipart transport",
+      uploadGuardText.includes('"upload_mode": "multipart"'),
+    );
+  }
 
   const badName = await request("tools/call", {
     name: "nexus_upload_mod_file",
