@@ -60,7 +60,7 @@ npm run inspect      # MCP Inspector web UI
 
 | Variable                       | Required | Description                                                   |
 |--------------------------------|----------|---------------------------------------------------------------|
-| `NEXUS_API_KEY`                | yes      | Personal Nexus key (`apikey` header)                          |
+| `NEXUS_API_KEY`                | yes      | Required by the server; supply it through MCP `env` or the repository `.env` file |
 | `NEXUS_OAUTH_TOKEN`            | no       | Bearer token for the v2 GraphQL / v3 REST APIs                |
 | `NEXUS_DEFAULT_GAME`           | no       | Default domain (`mountandblade2bannerlord`)                   |
 | `NEXUS_USER_AGENT`             | no       | Identifiable User-Agent, required by Nexus                    |
@@ -74,12 +74,12 @@ npm run inspect      # MCP Inspector web UI
 
 ## 4. Wiring it into a MCP client
 
-> **Recommended:** pass `NEXUS_API_KEY` (and any other overrides) through the `env` block of the
-> client's own MCP config, the same way every MCP host is designed to inject configuration into the
-> server subprocess. The `.env` file at the repo root is only a convenience fallback for local
-> development and the `npm run smoke*` scripts — it is git-ignored and never required once a client
-> supplies the key via `env`. Node's `process.loadEnvFile` never overrides a variable that is
-> already set in the process environment, so a client-provided `env` value always wins over `.env`.
+> **Recommended:** for this stdio server, provide credentials as environment variables. Do not
+> hardcode a real key in a versioned MCP configuration. Use the client's secure secret input or an
+> untracked environment file when supported, or inject `NEXUS_API_KEY` through the process
+> environment in CI. This server also loads `<checkout>/.env` itself for MCP clients without an
+> `envFile` feature. Node's `process.loadEnvFile` never overrides a variable already set in the
+> process environment, so a client-provided `env` value always wins over `.env`.
 
 ### JetBrains Rider + GitHub Copilot plugin (setup used here)
 
@@ -97,16 +97,20 @@ Block to add under `servers`:
   "command": "C:\\Program Files\\nodejs\\node.exe",
   "args": ["C:\\path\\to\\nexus-mods-mcp\\dist\\index.js"],
   "env": {
-    "NEXUS_API_KEY": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "NEXUS_API_KEY": "<your_api_key>",
     "NEXUS_DEFAULT_GAME": "mountandblade2bannerlord",
-    "NEXUS_ALLOW_WRITES": "false"
+    "NEXUS_ALLOW_WRITES": "false",
+    "NEXUS_ALLOW_UPLOADS": "false"
   }
 }
 ```
 
-Replace the example path and key above with your checkout location and personal API key. If you'd
-rather not store the key in this file, omit it from `env` and drop it into `<your checkout>/.env`
-instead — both are read, but `env` takes precedence.
+Replace the example path with your checkout location, then set `NEXUS_API_KEY` in
+`<your checkout>/.env`. The example keeps writes and uploads disabled explicitly; set the
+corresponding value to `true` only when needed. Do not commit the `.env` file. Values supplied
+through the client's `env` object take precedence over `.env`.
+The GitHub Copilot plugin for JetBrains does not document a secure input-variable equivalent to
+VS Code's `${input:...}` syntax, so use the checkout-local `.env` file for the key.
 After changing the code, run `npm run build` and restart the server (or Rider) so the client picks
 up the new tools.
 
@@ -121,7 +125,10 @@ up the new tools.
       "command": "C:\\Program Files\\nodejs\\node.exe",
       "args": ["C:\\path\\to\\nexus-mods-mcp\\dist\\index.js"],
       "env": {
-        "NEXUS_API_KEY": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        "NEXUS_API_KEY": "<your_api_key>",
+        "NEXUS_DEFAULT_GAME": "mountandblade2bannerlord",
+        "NEXUS_ALLOW_WRITES": "false",
+        "NEXUS_ALLOW_UPLOADS": "false"
       }
     }
   }
@@ -134,6 +141,11 @@ for that particular workflow, or on a per-user Junie secrets mechanism if availa
 
 ### VS Code / GitHub Copilot — `.vscode/mcp.json` (optional)
 
+The key is not required in this JSON. VS Code supports a password-protected `input` for a personal
+configuration, or `envFile` for an untracked `.env` file. This server also loads `<your checkout>/.env`
+itself, so omitting both properties works for a checkout-local configuration. An `env` value supplied
+by VS Code takes precedence.
+
 ```jsonc
 {
   "servers": {
@@ -141,7 +153,12 @@ for that particular workflow, or on a per-user Junie secrets mechanism if availa
       "type": "stdio",
       "command": "node",
       "args": ["E:\\Modding\\Tools\\nexus-mods-mcp\\dist\\index.js"],
-      "env": { "NEXUS_API_KEY": "${input:nexusApiKey}" }
+      "env": {
+        "NEXUS_API_KEY": "${input:nexusApiKey}",
+        "NEXUS_DEFAULT_GAME": "mountandblade2bannerlord",
+        "NEXUS_ALLOW_WRITES": "false",
+        "NEXUS_ALLOW_UPLOADS": "false"
+      }
     }
   },
   "inputs": [
