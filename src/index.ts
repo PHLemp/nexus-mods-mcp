@@ -56,7 +56,7 @@ if (!API_KEY) {
   process.exit(1);
 }
 
-const SERVER_VERSION = "0.3.0";
+const SERVER_VERSION = "0.4.0";
 const DEFAULT_GAME = process.env.NEXUS_DEFAULT_GAME?.trim() || "mountandblade2bannerlord";
 const numberEnv = (name: string, fallback: number): number => {
   const raw = Number(process.env[name]);

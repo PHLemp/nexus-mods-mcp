@@ -1,6 +1,6 @@
 {
   "name": "nexus-mods-mcp",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "description": "MCP server exposing the Nexus Mods API (v1 REST + v2 GraphQL + v3 Upload API) to an AI agent",
   "type": "module",
