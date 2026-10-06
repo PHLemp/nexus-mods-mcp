@@ -3,8 +3,8 @@
 **MCP** (Model Context Protocol) server exposing the [Nexus Mods API](https://api-docs.nexusmods.com)
 to an AI agent (GitHub Copilot, Claude, Junie...). Written in TypeScript, **stdio** transport.
 
-Covers the read APIs (v1 REST, v2 GraphQL) **and the v3 Upload API**, so an agent can publish or
-update one of your mods from a local archive.
+Covers the read APIs (v1 REST, v2 GraphQL) and v3 API writes, so an agent can publish a mod file or
+update a mod page's summary and description.
 
 Design goal: **answer a question in as few tool calls as possible**. Instead of a thin 1:1 mapping
 over REST endpoints, the high-value tools aggregate several requests and return compacted results.
@@ -15,7 +15,7 @@ A MCP server is a process speaking JSON-RPC 2.0 over stdin/stdout and declaring:
 
 | Primitive     | Role                                   | Here                                      |
 |---------------|----------------------------------------|-------------------------------------------|
-| **Tools**     | actions the model can call             | 21 Nexus tools (`nexus_*`)                |
+| **Tools**     | actions the model can call             | 23 Nexus tools (`nexus_*`)                |
 | **Resources** | documents the client can read          | `nexus://cheatsheet`, `nexus://graphql-cheatsheet`, `nexus://upload-guide` |
 | **Prompts**   | reusable prompt templates              | `nexus_mod_report`, `nexus_release_update` |
 | **Instructions** | global routing hints sent at `initialize` | "name -> find_mods -> mod_overview"  |
@@ -64,7 +64,7 @@ npm run inspect      # MCP Inspector web UI
 | `NEXUS_OAUTH_TOKEN`            | no       | Bearer token for the v2 GraphQL / v3 REST APIs                |
 | `NEXUS_DEFAULT_GAME`           | no       | Default domain (`mountandblade2bannerlord`)                   |
 | `NEXUS_USER_AGENT`             | no       | Identifiable User-Agent, required by Nexus                    |
-| `NEXUS_ALLOW_WRITES`           | no       | `true` to allow endorse / track / changelog / rename / mutations |
+| `NEXUS_ALLOW_WRITES`           | no       | `true` to allow endorse / track / changelog / rename / mod page edits / mutations |
 | `NEXUS_ALLOW_UPLOADS`          | no       | `true` to allow publishing files (also needs `NEXUS_ALLOW_WRITES`) |
 | `NEXUS_UPLOAD_ROOT`            | no       | Restricts which directory archives may be uploaded from       |
 | `NEXUS_UPLOAD_TIMEOUT_SECONDS` | no       | Timeout of each presigned transfer (default 900)              |
@@ -196,7 +196,7 @@ by VS Code takes precedence.
 | `nexus_list_author_mods` | full catalogue of an author (or "my mods"), with download/endorsement totals | replaces one call per mod |
 | `nexus_upload_mod_file`  | local archive -> published file or new version (+ optional changelog)        | replaces the 5-step v3 upload dance |
 
-### Publishing tools (v3 Upload API)
+### Publishing and mod page tools (v3 API)
 
 | Tool                      | Nexus endpoint                                                    | Write |
 |---------------------------|-------------------------------------------------------------------|-------|
@@ -205,6 +205,7 @@ by VS Code takes precedence.
 | `nexus_publish_upload`    | `/v3/mod-files[/{id}/versions]` from an existing `upload_id`      | yes*  |
 | `nexus_upload_status`     | `/v3/uploads/{id}`                                                | no    |
 | `nexus_add_changelog`     | `/v3/mods/{uid}/changelogs`                                       | yes   |
+| `nexus_edit_mod`          | `PATCH /v3/mods/{uid}` (summary and/or description)                | yes   |
 | `nexus_rename_mod_file`   | `PUT /v3/mod-files/{id}`                                          | yes   |
 
 \* also requires `NEXUS_ALLOW_UPLOADS=true`.

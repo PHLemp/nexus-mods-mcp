@@ -266,6 +266,7 @@ const server = new McpServer(
       "- nexus_upload_mod_file uploads AND publishes in one call; use dry_run=true first to check the plan.",
       "- If an upload finished but publishing failed, do NOT re-upload: reuse the upload_id with nexus_publish_upload.",
       "- Uploads need NEXUS_ALLOW_WRITES=true and NEXUS_ALLOW_UPLOADS=true; the archive must already exist on disk.",
+      "- Update a mod page's summary or description -> nexus_edit_mod (requires NEXUS_ALLOW_WRITES=true).",
       "",
       `Default game domain: ${DEFAULT_GAME} (omit game_domain_name to use it).`,
       "Responses are compacted and every reply ends with the remaining Nexus quota. Reads are cached for a few minutes: re-calling the same tool is cheap, but pass refresh=true when you need fresh data after an upload.",
@@ -1243,6 +1244,56 @@ server.registerTool(
     }),
 );
 
+server.registerTool(
+  "nexus_edit_mod",
+  {
+    title: "Edit mod page summary or description",
+    description:
+      "Update the summary, BBCode description, or both on a mod page. Omitted fields stay unchanged. Requires NEXUS_ALLOW_WRITES=true and permission to edit the mod (team member or admin).",
+    inputSchema: {
+      mod_id: z.number().int().positive().describe("Numeric mod id (visible in the page URL)"),
+      game_domain_name: gameArg,
+      summary: z
+        .string()
+        .max(350)
+        .refine((value) => value.replace(/\s+/g, " ").trim().length > 0, "Summary must not be blank.")
+        .optional()
+        .describe("Short mod summary (max 350 characters)"),
+      description: z
+        .string()
+        .min(1)
+        .refine((value) => value.trim().length > 0, "Description must not be blank.")
+        .optional()
+        .describe("Full mod page description in BBCode"),
+    },
+    annotations: writeOp,
+  },
+  async ({ mod_id, game_domain_name, summary, description }) =>
+    run(async () => {
+      if (summary === undefined && description === undefined) {
+        throw new Error("Provide at least one field: summary or description.");
+      }
+
+      const domain = game(game_domain_name);
+      const mod = await resolveMod(domain, mod_id);
+      await client.v3("PATCH", `/mods/${mod.id}`, {
+        body: prune({ summary, description }),
+        cache: false,
+      });
+
+      return {
+        mod_id,
+        mod_uid: mod.id,
+        updated_fields: [
+          ...(summary === undefined ? [] : ["summary"]),
+          ...(description === undefined ? [] : ["description"]),
+        ],
+        result: "updated",
+        page_url: modUrl(domain, mod_id),
+      };
+    }),
+);
+
 /* ------------------------------ Escape hatch ---------------------- */
 
 server.registerTool(
@@ -1325,6 +1376,7 @@ server.registerResource(
           "- `POST /v3/uploads`, `POST /v3/uploads/multipart`, `POST /v3/uploads/{id}/finalise`, `GET /v3/uploads/{id}`",
           "- `POST /v3/mod-files` (new file), `POST /v3/mod-files/{id}/versions` (new version), `PUT /v3/mod-files/{id}` (rename)",
           "- `GET /v3/games/{domain}/mods/{mod_id}` (numeric mod id -> internal mod id), `GET /v3/mods/{mod_uid}/files`",
+          "- `PATCH /v3/mods/{mod_uid}` (update mod page summary and/or description)",
           "- `POST /v3/mods/{mod_uid}/changelogs`",
           "",
           "## File categories returned by Nexus",

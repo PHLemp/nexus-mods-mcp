@@ -98,6 +98,7 @@ try {
     "nexus_publish_upload",
     "nexus_upload_status",
     "nexus_add_changelog",
+    "nexus_edit_mod",
     "nexus_rename_mod_file",
   ]) {
     check(`tool ${expected} registered`, names.has(expected));
@@ -107,6 +108,11 @@ try {
     tools.every((tool) => tool.annotations && typeof tool.annotations === "object"),
   );
   check("every tool has a description", tools.every((tool) => (tool.description ?? "").length > 40));
+  const missingModEditFields = await request("tools/call", {
+    name: "nexus_edit_mod",
+    arguments: { mod_id: 7501 },
+  });
+  check("mod page edit requires a summary or description", missingModEditFields.isError === true);
   const uploadTool = tools.find((tool) => tool.name === "nexus_upload_mod_file");
   check(
     "upload tool exposes no MD5 escape hatch",
